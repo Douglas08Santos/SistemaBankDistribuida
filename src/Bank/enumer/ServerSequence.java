@@ -1,7 +1,7 @@
 package Bank.enumer;
 
 public enum ServerSequence {
-	REQUEST_USERNAME,
+	RESPONSE_CONNECTION,
 	REQUEST_PASSWORD,
 	LOGIN_RESULT,
 	SEND_RESULT,

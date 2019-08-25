@@ -23,30 +23,32 @@ public class ServerUDPBank {
 		Bank myBank = new Bank();
 		
 		byte[] inputData = new byte[1024];
-		//byte[] outputData = new byte[1024];
 		
-		int port = Integer.parseInt(/*args[0]*/"2019");
+		if (args.length < 1) {
+			throw new IllegalArgumentException("Falta os argumentos do endereço IP e a porta");
+		}
+		
+		int port = Integer.parseInt(args[0]);
+		boolean debug = false; 
+		if (args.length >= 2) { 
+			debug = args[1].equals("-d");	
+		}
+		
 		
 		String[] receiveDataComponents;	
 		String receiveData;
 		InetAddress address;
 		int sequenceNumber;
 		int clientPort;
-		byte[] sendData;
+		byte[] sendData = new byte[1024];
 		
 		DatagramSocket socket = new DatagramSocket(port);
-		System.out.println("Cliente na porta " + port);
-		
+		System.out.println("Server na porta " + port);
+		//pacote recebido do cliente
+		DatagramPacket receivePacket = new DatagramPacket(inputData, inputData.length);	
+		socket.setSoTimeout(60*100);
+		socket.receive(receivePacket);
 		while(true) {
-			
-			//Autenticação - criando pacote
-			DatagramPacket receivePacket = new DatagramPacket(inputData, inputData.length);
-			
-			socket.receive(receivePacket);
-			
-			//Definindo timeOut para os pacotes
-			socket.setSoTimeout(1500);
-			
 			receiveData = new String(receivePacket.getData(), 0, receivePacket.getLength());
 			//Capturando o endereço ip do cliente(emissor)
 			address = receivePacket.getAddress();
@@ -57,249 +59,106 @@ public class ServerUDPBank {
 			sequenceNumber = Integer.parseInt(receiveDataComponents[0]);
 			receiveData = receiveDataComponents[1];
 			
-			
-			boolean isRequest = (sequenceNumber == ClientSequence.REQUEST_CONNECTION.ordinal());
-			
+			//Criando pacote para responder as requisições do usuario
+			DatagramPacket sendPacket = new DatagramPacket(sendData, 
+					sendData.length, address, clientPort);
 			/*
 			 * Se a conexão não estiver ocupada, e tiver recebido o pacote, começa a operação
 			 */
-			if (isRequest) {
-				//Criando o pacote ACK
-				sendData = (ServerSequence.REQUEST_USERNAME.ordinal() + ":ACK").getBytes();//requisição do nome do usuario
-				DatagramPacket sendPacket = new DatagramPacket(sendData, 
-						sendData.length, address, clientPort);
-				
-				//debug
-				//System.out.println("IP: " + address + "\nPort: " + clientPort)
-				
-				
+			
+			
+			if (sequenceNumber == ClientSequence.REQUEST_CONNECTION.ordinal()) {
+				//Mensagem de confirmação de conexão estabelecida
+				sendData = (ServerSequence.RESPONSE_CONNECTION.ordinal() + ":ACK").getBytes();
+				sendPacket.setData(sendData);
+				sendPacket.setLength(sendData.length);
 				socket.send(sendPacket);
-				
-				//Experando a requisição do nome do usuário
-				boolean flagAck = false;
-				receivePacket.setData(new byte[1024]);
-				while(!flagAck) {
-					try {
-						socket.receive(receivePacket);
-						receiveDataComponents = new String(receivePacket.getData(), 0, 
-								receivePacket.getLength()).split(":");
-						sequenceNumber = Integer.parseInt(receiveDataComponents[0]);
-						receiveData = receiveDataComponents[1];
-						
-						if(receivePacket.getPort() == clientPort && 
-								address.equals(receivePacket.getAddress()) &&
-								sequenceNumber == ClientSequence.SEND_USERNAME.ordinal()) {
-							
-							flagAck = true;
-						}
-						
-					} catch (SocketTimeoutException e) {
-						socket.send(sendPacket);
-						continue;
-					}
-				}
-				
-				//Agora temos o nome do usuario
-				sequenceNumber = Integer.parseInt(receiveDataComponents[0]);
-				String username = receiveData;
-				
-				//Debug
-				//System.out.println("username" + username);
-				
-				//Solicitação de senha
-				
-				sendData = (ServerSequence.REQUEST_PASSWORD.ordinal() + ":ACK").getBytes();//requisição da senha do usuario
-				sendPacket = new DatagramPacket(sendData, 
-						sendData.length, address, clientPort);
-				
-				//debug
-				//System.out.println("IP: " + address + "\nPort: " + clientPort)
-				
-				
-				socket.send(sendPacket);
-				
-				flagAck = false;
-				receivePacket.setData(new byte[1024]);
-				while(!flagAck) {
-					try {
-						socket.receive(receivePacket);
-						receiveDataComponents = new String(receivePacket.getData(), 0, 
-								receivePacket.getLength()).split(":");
-						sequenceNumber = Integer.parseInt(receiveDataComponents[0]);
-						receiveData = receiveDataComponents[1];
-						
-						if(receivePacket.getPort() == clientPort && 
-								address.equals(receivePacket.getAddress()) &&
-								sequenceNumber == ClientSequence.SEND_PASSWORD.ordinal()) {
-							
-							flagAck = true;
-						}
-						
-					} catch (SocketTimeoutException e) {
-						socket.send(sendPacket);
-						continue;
-					}
-				}
-				
-				//Agora temos a senha do usuario(TODO: usar md5)
-				sequenceNumber = Integer.parseInt(receiveDataComponents[0]);
-				String password = receiveData;
-				
+				if (debug) {
+					System.out.println("IP: " + address + "\nPort: " + clientPort);
+				}							
+			}else if (sequenceNumber == ClientSequence.SEND_USERNAME_PASSWORD.ordinal()) {
+				String username = receiveDataComponents[1];
+				String password = receiveDataComponents[2];
 				//Verificando se a senha foi aceita
 				boolean accessOK = password.equals(myBank.getPassword(username));
 				if(accessOK) {
 					sendData = (ServerSequence.LOGIN_RESULT.ordinal() + ":" 
-								+ "Acesso permitido").getBytes();
+								+ "LOGIN_OK" + ":").getBytes();
 				}else {
 					sendData = (ServerSequence.LOGIN_RESULT.ordinal() + ":"
-								+ "Acesso negado").getBytes();
+								+ "LOGIN_FAIL" +":").getBytes();
 				}
 				sendPacket.setData(sendData);
 				sendPacket.setLength(sendData.length);
 				socket.send(sendPacket);
+			}else if (sequenceNumber == ClientSequence.SEND_COMMAND.ordinal()) {
+				String strCommand = receiveDataComponents[1];
+				String username = receiveDataComponents[3];
+				String result = username + " o saldo inicial é de - " 
+								+ myBank.printBalance(myBank.getBalance(username));
+				int amount = 0;
+				if (receiveDataComponents[2] != null) {
+					amount = (int) (Float.parseFloat(receiveDataComponents[2]));
+				}
 				
-				//Se o login foi aceito o cliente está autorizado a realizar as operações
-				if(accessOK) {
-					//Operações do Banco
-					flagAck = false;
-					receivePacket.setData(new byte[1024]);
-					while(!flagAck) {
-						try {
-							socket.receive(receivePacket);
-							receiveDataComponents = new String(receivePacket.getData(), 0, 
-									receivePacket.getLength()).split(":");
-							sequenceNumber = Integer.parseInt(receiveDataComponents[0]);
-							receiveData = receiveDataComponents[1];
-							
-							if(receivePacket.getPort() == clientPort && 
-									address.equals(receivePacket.getAddress()) &&
-									sequenceNumber == ClientSequence.SEND_COMMAND.ordinal()) {
-								
-								flagAck = true;
-							}
-							
-						} catch (SocketTimeoutException e) {
-							socket.send(sendPacket);
-							continue;
-						}
+				if (debug) {
+					System.out.println(strCommand + ":" + amount);
+				}
+				
+				if (strCommand.equals("deposit")) {
+					myBank.deposit(username, amount);
+					result += " Deposito realizado!! Seu saldo é de - " 
+							+ myBank.printBalance(myBank.getBalance(username));
+					
+				}else if (strCommand.equals("withdraw")) {
+					if (myBank.withdraw(username, amount)) {
+						result += " Saque realizado!! Seu saldo é de - "
+								+ myBank.printBalance(myBank.getBalance(username));
+					}else {
+						result += " Saldo não realizado!! Saldo indisponivel "
+								+ "se saldo atual é de - " +myBank.printBalance(myBank.getBalance(username));
 					}
-					
-					String command = receiveDataComponents[1];
-					int amount = (int) (Float.parseFloat(receiveDataComponents[2]) *100);
-					//int balance = myBank.getBalance(username);
-					
-					String result = username + ", balanço: " + myBank.printBalance(myBank.getBalance(username)) + ".";
-					
-					if(command.equals("deposit")) {
-						myBank.deposit(username, amount);
-						result += "realizado deposito, o balanço é de: " + 
-									myBank.printBalance(myBank.getBalance(username)) + ".";
-					}else if (command.equals("withdraw")) {
-						if(myBank.withdraw(username, amount)) {
-							result += "realizado saque, o balanço é de: " + 
-									myBank.printBalance(myBank.getBalance(username)) + ".";
+				}else if (strCommand.equals("transfer")) {
+					if (receiveDataComponents[4] != null) {
+						String destinyUser = receiveDataComponents[4];
+						if (myBank.transfer(username, amount, destinyUser)) {
+							result += "Transferência Concluída - <" + username +
+									"> --" + amount + "--> - <"+ destinyUser+ ">";
 						}else {
-							result += "saque não realizado, saldo indisponivel";
+							result += "Transferencia Negada";
 						}
-					}else if(command.equals("transfer")) {
-						if(receiveDataComponents[3] != null) {
-							String destinyUser = receiveDataComponents[3];
-							if(myBank.transfer(username, amount, destinyUser)) {
-								result += "Transferência Concluída: <" + username +
-										"> --" + amount + "--><"+ destinyUser+ ">";
-							}else {
-								result += "Transferencia Negada";
-							}
-						}
-					}
-					
-					//Debug
-					//System.out.println("Resultado das transações: " + result);
-					
-					//Enviar para o usuario o log das suas atividades
-					sendData = (ServerSequence.SEND_RESULT.ordinal() + ":"+result).getBytes();
-					sendPacket.setData(sendData);
-					sendPacket.setLength(sendData.length);
-					socket.send(sendPacket);
-				}
-				
-				
-				//Fechando a conexão
-				flagAck = false;
-				receivePacket.setData(new byte[1024]);
-				while(!flagAck) {
-					try {
-						socket.receive(receivePacket);
-						receiveDataComponents = new String(receivePacket.getData(), 0, 
-								receivePacket.getLength()).split(":");
-						sequenceNumber = Integer.parseInt(receiveDataComponents[0]);
-						receiveData = receiveDataComponents[1];
-						
-						if(receivePacket.getPort() == clientPort && 
-								address.equals(receivePacket.getAddress()) &&
-								sequenceNumber == ClientSequence.FIN.ordinal()) {
-							
-							flagAck = true;
-						}
-						
-					} catch (SocketTimeoutException e) {
-						
-						socket.send(sendPacket);
-						continue;
 					}
 				}
 				
-				//Debug
-				//System.out.println("Recebendo comando para encerrar a conexão");
+				if (debug) {					
+					System.out.println("Resultado das transações: " + result);
+				}
 				
-				//Enviando um pacote de fim de conexão
-				sendData = (ServerSequence.FIN.ordinal() + ":"+ "FIN_ACK").getBytes();
+				//Enviar para o usuario o log das suas atividades
+				sendData = (ServerSequence.SEND_RESULT.ordinal() + ":"+result).getBytes();
 				sendPacket.setData(sendData);
 				sendPacket.setLength(sendData.length);
-				socket.send(sendPacket); 
-				
-				//Debug
-				//System.out.println("Enviando FIN");
-				
-				//Esperando o pacote de FIN_ACK
-				flagAck = false;
-				receivePacket.setData(new byte[1024]);
-				while(!flagAck) {
-					try {
-						socket.receive(receivePacket);
-						receiveDataComponents = new String(receivePacket.getData(), 0, 
-								receivePacket.getLength()).split(":");
-						sequenceNumber = Integer.parseInt(receiveDataComponents[0]);
-						receiveData = receiveDataComponents[1];
-						
-						if(receivePacket.getPort() == clientPort && 
-								address.equals(receivePacket.getAddress()) &&
-								sequenceNumber == ClientSequence.FIN_ACK.ordinal()) {
-							
-							flagAck = true;
-						}
-						
-					} catch (SocketTimeoutException e) {
-						
-						socket.send(sendPacket);
-						continue;
-					}
-				}
-				//Debug
-				//System.out.println("Enviando FIN_ACK");
-				
+				socket.send(sendPacket);
 			}
-			
-			socket.setSoTimeout(0);
-			
-			
-			
-			
-			
-			
+			//Fica ouvindo a rede
+			boolean flagAck = false;				
+			while(!flagAck) {
+				try {
+					sequenceNumber = -1;
+					socket.receive(receivePacket);
+					receiveDataComponents = new String(receivePacket.getData(), 0, 
+							receivePacket.getLength()).split(":");
+					sequenceNumber = Integer.parseInt(receiveDataComponents[0]);
+					receiveData = receiveDataComponents[1];
+
+					if(sequenceNumber !=  -1) {
+						flagAck = true;					
+					}
+				} catch (SocketTimeoutException e) {
+					socket.send(sendPacket);
+					continue;
+				}
+			}
 		}
-		
-		
-		
 	}
 }
