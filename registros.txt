@@ -1,6 +1,3 @@
-Forma de entrada para o banco:
-<Nome> -- <Senha> -- [(opcional) saldo inicial]
-***********
 DouglaSantos -- firstSon08
 WillianBiersack -- theBother18 -- 0500
 Jo28sec -- theFather20

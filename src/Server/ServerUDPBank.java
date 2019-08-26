@@ -19,6 +19,14 @@ import Bank.enumer.ServerSequence;
  * -- Generate salt para a codificação md5
  */
 public class ServerUDPBank {
+	public void saveData(Bank myBank) {
+		
+	}
+	
+	public void sendingData(DatagramSocket socket) {
+		//TODO
+	}
+	
 	public static void main(String args[]) throws Exception{
 		Bank myBank = new Bank();
 		
@@ -47,7 +55,24 @@ public class ServerUDPBank {
 		//pacote recebido do cliente
 		DatagramPacket receivePacket = new DatagramPacket(inputData, inputData.length);	
 		socket.setSoTimeout(60*100);
-		socket.receive(receivePacket);
+		//Fica ouvindo a rede
+		boolean flagAck = false;				
+		while(!flagAck) {
+			try {
+				sequenceNumber = -1;
+				socket.receive(receivePacket);
+				receiveDataComponents = new String(receivePacket.getData(), 0, 
+						receivePacket.getLength()).split(":");
+				sequenceNumber = Integer.parseInt(receiveDataComponents[0]);
+				receiveData = receiveDataComponents[1];
+
+				if(sequenceNumber !=  -1) {
+					flagAck = true;					
+				}
+			} catch (SocketTimeoutException e) {				
+				continue;
+			}
+		}
 		while(true) {
 			receiveData = new String(receivePacket.getData(), 0, receivePacket.getLength());
 			//Capturando o endereço ip do cliente(emissor)
@@ -119,7 +144,7 @@ public class ServerUDPBank {
 								+ "se saldo atual é de - " +myBank.printBalance(myBank.getBalance(username));
 					}
 				}else if (strCommand.equals("transfer")) {
-					if (receiveDataComponents[4] != null) {
+					try {						
 						String destinyUser = receiveDataComponents[4];
 						if (myBank.transfer(username, amount, destinyUser)) {
 							result += "Transferência Concluída - <" + username +
@@ -127,6 +152,9 @@ public class ServerUDPBank {
 						}else {
 							result += "Transferencia Negada";
 						}
+						
+					} catch (ArrayIndexOutOfBoundsException e) {
+						result += "Transferencia Negada";
 					}
 				}
 				
@@ -141,7 +169,7 @@ public class ServerUDPBank {
 				socket.send(sendPacket);
 			}
 			//Fica ouvindo a rede
-			boolean flagAck = false;				
+			flagAck = false;				
 			while(!flagAck) {
 				try {
 					sequenceNumber = -1;

@@ -32,9 +32,6 @@ public class Bank {
 		BufferedReader buffer = new BufferedReader(input);
 		String line = "";
 		
-		//Pular a mensagem inicial
-		while(!(line = buffer.readLine()).equals("***********"));
-		
 		//Ler os usuarios listados no arquivo
 		while((line = buffer.readLine())!= null) {
 			//usamos o '--' com separador
