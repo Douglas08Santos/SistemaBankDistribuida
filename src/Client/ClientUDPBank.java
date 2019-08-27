@@ -207,6 +207,7 @@ public class ClientUDPBank {
 				clientSocket.send(sendPacket);
 
 				//Aguardando resposta do server sobre a operação requisitada
+				String response = null;
 				flagAck = false;
 				receivePacket.setData(new byte[1024]);
 				while(!flagAck) {
@@ -216,7 +217,7 @@ public class ClientUDPBank {
 						receiveDataComponents = new String(receivePacket.getData(), 0, 
 								receivePacket.getLength()).split(":");
 						sequenceNumber = Integer.parseInt(receiveDataComponents[0]);
-						receiveData = receiveDataComponents[1];
+						response = receiveDataComponents[1];
 
 						if(sequenceNumber == ServerSequence.SEND_RESULT.ordinal()) {
 							flagAck = true;
@@ -227,7 +228,7 @@ public class ClientUDPBank {
 						continue;
 					}
 				}
-				System.out.println(receiveData);
+				System.out.println(response);
 
 			}
 
