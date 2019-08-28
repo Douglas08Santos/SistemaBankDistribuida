@@ -93,6 +93,8 @@ public class ClientUDPBank {
 			e.printStackTrace();
 		}
 		
+		
+		
 	}
 	//Função que espera a resposta do servidor
 	public boolean response(int serverFlag) throws IOException {
@@ -109,7 +111,7 @@ public class ClientUDPBank {
 			try {
 				getClientSocket().receive(receivePacket);
 				receiveDataComponents = new String(receivePacket.getData(), 0, 
-						receivePacket.getLength()).split("\\:");
+						receivePacket.getLength()).split(":");
 				sequenceNumber = Integer.parseInt(receiveDataComponents[0]);
 				if(sequenceNumber == serverFlag) {
 					flagAck = true;
@@ -204,7 +206,6 @@ public class ClientUDPBank {
 		
 	}
 	public static void main(String[] args) throws Exception {
-		
 		//Verifica se foi passado os args necessarios
 		if(!(args.length >= 1)) {
 			throw new IllegalArgumentException("Falta os argumentos do endereço IP e a porta");
@@ -241,17 +242,37 @@ public class ClientUDPBank {
 		if (debug) {
 			System.out.println("Rodando - IP: " + addressAndPort[0] +"\nPort: " + addressAndPort[1]);
 		}	
-		/******************* Começa daqui ****************************/
-		String[] receiveDataComponents;
-		int sequenceNumber = 0;
-		String receiveData = "";
-		byte[] sendData;
-
 		
-
+		
 		ClientUDPBank myCliente = new ClientUDPBank(ipAddress, port);
 		myCliente.requestConnection();
-		boolean connection = myCliente.response(ServerSequence.RESPONSE_CONNECTION.ordinal());
+		
+		byte[] inboundData = new byte[1024];
+		DatagramPacket receivePacket = new DatagramPacket(inboundData, inboundData.length);
+		String[] receiveDataComponents = null;
+		int sequenceNumber = 0;
+		boolean connection = false;
+		boolean flagAck = false;
+		String receiveData = null;
+		//Confirmação de conexão
+		while(!flagAck) {
+			try {
+				myCliente.getClientSocket().receive(receivePacket);
+				receiveDataComponents = new String(receivePacket.getData(), 0, 
+						receivePacket.getLength()).split(":");
+				sequenceNumber = Integer.parseInt(receiveDataComponents[0]);
+				receiveData = receiveDataComponents[1];
+				if(sequenceNumber == ServerSequence.RESPONSE_CONNECTION.ordinal()) {
+					flagAck = true;
+					connection = true;
+				}
+			} catch (SocketTimeoutException e) {
+				myCliente.requestConnection();
+				continue;
+			}
+		}
+		
+		 
 
 		if (connection) {			
 			if (debug) {
@@ -282,7 +303,7 @@ public class ClientUDPBank {
 					accessOk = false;				
 				}else {
 					myCliente.operationbank(username, opt);
-					boolean result = myCliente.response(ServerSequence.SEND_RESULT.ordinal());
+					myCliente.response(ServerSequence.SEND_RESULT.ordinal());
 				}
 				
 							
